@@ -10,7 +10,6 @@ import {
 import { getUserByEmail } from '@/lib/dal'
 import { mockDelay } from '@/lib/utils'
 import { redirect } from 'next/navigation'
-import { error } from 'console'
 
 // Define Zod schema for signin validation
 const SignInSchema = z.object({
