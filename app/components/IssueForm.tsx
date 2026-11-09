@@ -1,7 +1,7 @@
 'use client'
 
 import { useActionState } from 'react'
-import { useRouter } from 'next/navigation'
+import { unstable_rethrow, useRouter } from 'next/navigation'
 import { Issue, ISSUE_STATUS, ISSUE_PRIORITY } from '@/db/schema'
 import Button from './ui/Button'
 import {
@@ -16,8 +16,7 @@ import {
 import { createIssue, ActionResponse, updateIssue } from '@/app/actions/issues'
 
 interface IssueFormProps {
-  issue?: Issue
-  userId: string
+  issue?: Pick<Issue, 'id' | 'title' | 'description' | 'status' | 'priority'>
   isEditing?: boolean
 }
 
@@ -27,11 +26,15 @@ const initialState: ActionResponse = {
   errors: undefined,
 }
 
-export default function IssueForm({
-  issue,
-  userId,
-  isEditing = false,
-}: IssueFormProps) {
+// Next keeps visited pages alive while hidden, so a form would come back with
+// its old text and messages. A new key gives each fresh visit a clean form.
+export default function IssueForm(props: IssueFormProps) {
+  const { bfcacheId } = useRouter()
+
+  return <IssueFormContent key={bfcacheId} {...props} />
+}
+
+function IssueFormContent({ issue, isEditing = false }: IssueFormProps) {
   const router = useRouter()
 
   // Use useActionState hook for the form submission action
@@ -49,25 +52,18 @@ export default function IssueForm({
         | 'in_progress'
         | 'done',
       priority: formData.get('priority') as 'low' | 'medium' | 'high',
-      userId,
     }
 
     try {
       // Call the appropriate action based on whether we're editing or creating
-      const result = isEditing
+      // On success these redirect to the dashboard, so a returned result is a failure
+      return isEditing
         ? await updateIssue(Number(issue!.id), data)
         : await createIssue(data)
-
-      // Handle successful submission
-      if (result.success) {
-        router.refresh()
-        if (!isEditing) {
-          router.push('/dashboard')
-        }
-      }
-
-      return result
     } catch (err) {
+      // Let the redirect from the action through
+      unstable_rethrow(err)
+
       return {
         success: false,
         message: (err as Error).message || 'An error occurred',
@@ -91,13 +87,7 @@ export default function IssueForm({
   return (
     <Form action={formAction}>
       {state?.message && (
-        <FormError
-          className={`mb-4 ${
-            state.success ? 'bg-green-100 text-green-800 border-green-300' : ''
-          }`}
-        >
-          {state.message}
-        </FormError>
+        <FormError className="mb-4">{state.message}</FormError>
       )}
 
       <FormGroup>

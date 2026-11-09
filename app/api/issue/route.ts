@@ -1,8 +1,16 @@
 import { db } from '@/db'
 import { issues } from '@/db/schema'
+import { getCurrentUser } from '@/lib/dal'
+import { IssueSchema } from '@/lib/validation'
+import { revalidateTag } from 'next/cache'
 import { NextResponse } from 'next/server'
 
 export async function GET() {
+  const user = await getCurrentUser()
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
   try {
     const allIssues = await db.query.issues.findMany()
     return NextResponse.json(allIssues)
@@ -16,28 +24,36 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  try {
-    const data = await request.json()
+  const user = await getCurrentUser()
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
 
-    // Validate required fields
-    if (!data.title || !data.userId) {
+  try {
+    const body = await request.json().catch(() => null)
+    const validationResult = IssueSchema.safeParse({
+      status: 'backlog',
+      priority: 'medium',
+      ...body,
+    })
+
+    if (!validationResult.success) {
       return NextResponse.json(
-        { error: 'Title and userId are required' },
+        {
+          error: 'Validation failed',
+          errors: validationResult.error.flatten().fieldErrors,
+        },
         { status: 400 },
       )
     }
 
-    // Create the issue
+    // The owner always comes from the session, never from the request body
     const newIssue = await db
       .insert(issues)
-      .values({
-        title: data.title,
-        description: data.description || null,
-        status: data.status || 'backlog',
-        priority: data.priority || 'medium',
-        userId: data.userId,
-      })
+      .values({ ...validationResult.data, userId: user.id })
       .returning()
+
+    revalidateTag('issues', { expire: 0 })
 
     return NextResponse.json(
       { message: 'Issue created successfully', issue: newIssue[0] },

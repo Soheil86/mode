@@ -2,38 +2,23 @@
 
 import { db } from '@/db'
 import { issues } from '@/db/schema'
-import { eq } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 import { getCurrentUser } from '@/lib/dal'
-import { z } from 'zod'
-import { mockDelay } from '@/lib/utils'
-import { revalidateTag } from 'next/cache'
-
-// Define Zod schema for issue validation
-const IssueSchema = z.object({
-  title: z
-    .string()
-    .min(3, 'Title must be at least 3 characters')
-    .max(100, 'Title must be less than 100 characters'),
-
-  description: z.string().optional().nullable(),
-
-  status: z.enum(['backlog', 'todo', 'in_progress', 'done'], {
-    errorMap: () => ({ message: 'Please select a valid status' }),
-  }),
-
-  priority: z.enum(['low', 'medium', 'high'], {
-    errorMap: () => ({ message: 'Please select a valid priority' }),
-  }),
-  userId: z.string().min(1, 'User ID is required'),
-})
-
-export type IssueData = z.infer<typeof IssueSchema>
+import { IssueSchema, type IssueData } from '@/lib/validation'
+import { updateTag } from 'next/cache'
+import { redirect } from 'next/navigation'
 
 export type ActionResponse = {
   success: boolean
   message: string
   errors?: Record<string, string[]>
   error?: string
+}
+
+const NOT_OWNER_RESPONSE: ActionResponse = {
+  success: false,
+  message: 'Issue not found, or you do not have permission to change it',
+  error: 'Forbidden',
 }
 
 export async function createIssue(data: IssueData): Promise<ActionResponse> {
@@ -56,18 +41,13 @@ export async function createIssue(data: IssueData): Promise<ActionResponse> {
         errors: validationResult.error.flatten().fieldErrors,
       }
     }
-    // Create issue with validated data
-    const validatedData = validationResult.data
+    // The owner always comes from the session, never from the browser
     await db.insert(issues).values({
-      title: validatedData.title,
-      description: validatedData.description,
-      status: validatedData.status,
-      priority: validatedData.priority,
-      userId: validatedData.userId,
+      ...validationResult.data,
+      userId: user.id,
     })
 
-    revalidateTag('issues')
-    return { success: true, message: 'Issue created successfully' }
+    updateTag('issues')
   } catch (error) {
     console.error('Error creating issue:', error)
     return {
@@ -76,6 +56,9 @@ export async function createIssue(data: IssueData): Promise<ActionResponse> {
       error: 'Failed to create issue',
     }
   }
+
+  // Outside the try: redirect() works by throwing, so catch would swallow it
+  redirect('/dashboard')
 }
 
 export async function updateIssue(
@@ -84,7 +67,6 @@ export async function updateIssue(
 ): Promise<ActionResponse> {
   try {
     // Security check - ensure user is authenticated
-    await mockDelay(700)
     const user = await getCurrentUser()
     if (!user) {
       return {
@@ -95,8 +77,7 @@ export async function updateIssue(
     }
 
     // Allow partial validation for updates
-    const UpdateIssueSchema = IssueSchema.partial()
-    const validationResult = UpdateIssueSchema.safeParse(data)
+    const validationResult = IssueSchema.partial().safeParse(data)
 
     if (!validationResult.success) {
       return {
@@ -106,23 +87,18 @@ export async function updateIssue(
       }
     }
 
-    // Type safe update object with validated data
-    const validatedData = validationResult.data
-    const updateData: Record<string, unknown> = {}
+    // Only matches when the signed-in user owns this issue
+    const updated = await db
+      .update(issues)
+      .set({ ...validationResult.data, updatedAt: new Date() })
+      .where(and(eq(issues.id, id), eq(issues.userId, user.id)))
+      .returning()
 
-    if (validatedData.title !== undefined)
-      updateData.title = validatedData.title
-    if (validatedData.description !== undefined)
-      updateData.description = validatedData.description
-    if (validatedData.status !== undefined)
-      updateData.status = validatedData.status
-    if (validatedData.priority !== undefined)
-      updateData.priority = validatedData.priority
+    if (updated.length === 0) {
+      return NOT_OWNER_RESPONSE
+    }
 
-    // Update issue
-    await db.update(issues).set(updateData).where(eq(issues.id, id))
-
-    return { success: true, message: 'Issue updated successfully' }
+    updateTag('issues')
   } catch (error) {
     console.error('Error updating issue:', error)
     return {
@@ -131,20 +107,30 @@ export async function updateIssue(
       error: 'Failed to update issue',
     }
   }
+
+  // Outside the try: redirect() works by throwing, so catch would swallow it
+  redirect('/dashboard')
 }
 
-export async function deleteIssue(id: number) {
+export async function deleteIssue(id: number): Promise<ActionResponse> {
   try {
     // Security check - ensure user is authenticated
-    await mockDelay(700)
     const user = await getCurrentUser()
     if (!user) {
       throw new Error('Unauthorized')
     }
 
-    // Delete issue
-    await db.delete(issues).where(eq(issues.id, id))
+    // Only matches when the signed-in user owns this issue
+    const deleted = await db
+      .delete(issues)
+      .where(and(eq(issues.id, id), eq(issues.userId, user.id)))
+      .returning()
 
+    if (deleted.length === 0) {
+      return NOT_OWNER_RESPONSE
+    }
+
+    updateTag('issues')
     return { success: true, message: 'Issue deleted successfully' }
   } catch (error) {
     console.error('Error deleting issue:', error)

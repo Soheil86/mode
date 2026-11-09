@@ -30,7 +30,3 @@ export function slugify(text: string) {
     .replace(/^-+/, '') // Trim - from start of text
     .replace(/-+$/, '') // Trim - from end of text
 }
-
-export function mockDelay(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms))
-}

@@ -1,19 +1,24 @@
-import { getIssue } from '@/lib/dal'
+import { getIssue, requireUser } from '@/lib/dal'
 import IssueForm from '@/app/components/IssueForm'
 import { ArrowLeftIcon } from 'lucide-react'
 import Link from 'next/link'
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 export default async function EditIssuePage({
   params,
 }: {
   params: Promise<{ id: string }>
 }) {
+  const currentUser = await requireUser()
   const { id } = await params
 
   const issue = await getIssue(parseInt(id))
 
   if (!issue) {
     notFound()
+  }
+
+  if (issue.userId !== currentUser.id) {
+    redirect(`/issues/${id}`)
   }
 
   return (
@@ -29,7 +34,17 @@ export default async function EditIssuePage({
       <h1 className="text-2xl font-bold mb-6">Edit Issue</h1>
 
       <div className="bg-white dark:bg-dark-elevated border border-gray-200 dark:border-dark-border-default rounded-lg shadow-sm p-6">
-        <IssueForm userId={issue.userId} issue={issue} isEditing />
+        {/* Only pass the fields the form needs: props are sent to the browser */}
+        <IssueForm
+          issue={{
+            id: issue.id,
+            title: issue.title,
+            description: issue.description,
+            status: issue.status,
+            priority: issue.priority,
+          }}
+          isEditing
+        />
       </div>
     </div>
   )

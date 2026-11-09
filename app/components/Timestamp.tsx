@@ -1,17 +1,15 @@
 'use client'
 
-import { useState, useLayoutEffect } from 'react'
+import { useSyncExternalStore } from 'react'
+
+// The year never changes while the page is open, so there's nothing to subscribe to
+const subscribe = () => () => {}
 
 export function Timestamp() {
-  const [time, setTime] = useState<number | null>(null)
-
-  useLayoutEffect(() => {
-    // You can determine when and how often to update
-    // the time here. In this example we update it only once
-    setTime(new Date().getFullYear())
-  }, [])
-  if (time) {
-    return time
-  }
-  return null
+  // Renders nothing on the server, then the current year in the browser
+  return useSyncExternalStore(
+    subscribe,
+    () => new Date().getFullYear(),
+    () => null,
+  )
 }

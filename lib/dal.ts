@@ -3,10 +3,10 @@ import { getSession } from './auth'
 import { eq } from 'drizzle-orm'
 import { cache } from 'react'
 import { issues, users } from '@/db/schema'
-import { mockDelay } from './utils'
-import { unstable_cacheTag as cacheTag } from 'next/cache'
+import { cacheTag } from 'next/cache'
+import { redirect } from 'next/navigation'
 
-// Current user
+// Current user (never includes the password hash)
 export const getCurrentUser = cache(async () => {
   const session = await getSession()
   if (!session) {
@@ -15,7 +15,11 @@ export const getCurrentUser = cache(async () => {
 
   try {
     const results = await db
-      .select()
+      .select({
+        id: users.id,
+        email: users.email,
+        createdAt: users.createdAt,
+      })
       .from(users)
       .where(eq(users.id, session.userId))
 
@@ -26,7 +30,16 @@ export const getCurrentUser = cache(async () => {
   }
 })
 
-// Get user by email
+// Current user, or redirect to sign in. Call this in every protected page.
+export async function requireUser() {
+  const user = await getCurrentUser()
+  if (!user) {
+    redirect('/signin')
+  }
+  return user
+}
+
+// Get user by email, including the password hash. Only for verifying sign-in.
 export const getUserByEmail = async (email: string) => {
   try {
     const result = await db.select().from(users).where(eq(users.email, email))
@@ -43,7 +56,7 @@ export async function getIssues() {
   try {
     const result = await db.query.issues.findMany({
       with: {
-        user: true,
+        user: { columns: { id: true, email: true } },
       },
       orderBy: (issues, { desc }) => [desc(issues.createdAt)],
     })
@@ -59,7 +72,7 @@ export const getIssue = async (id: number) => {
     const issue = await db.query.issues.findFirst({
       where: eq(issues.id, id),
       with: {
-        user: true,
+        user: { columns: { id: true, email: true } },
       },
     })
     return issue

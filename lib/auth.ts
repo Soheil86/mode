@@ -12,10 +12,15 @@ interface JWTPayload {
   [key: string]: string | number | boolean | null | undefined
 }
 
-// Secret key for JWT signing (in a real app, use an environment variable)
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || 'your-secret-key-min-32-chars-long!!!'
-)
+// Secret key for JWT signing. There is deliberately no fallback value: a
+// default secret would let anyone forge a session.
+function getJwtSecret() {
+  const secret = process.env.JWT_SECRET
+  if (!secret || secret.length < 32) {
+    throw new Error('JWT_SECRET must be set to at least 32 characters')
+  }
+  return new TextEncoder().encode(secret)
+}
 
 // JWT expiration time
 const JWT_EXPIRATION = '7d' // 7 days
@@ -58,13 +63,16 @@ export async function generateJWT(payload: JWTPayload) {
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
     .setExpirationTime(JWT_EXPIRATION)
-    .sign(JWT_SECRET)
+    .sign(getJwtSecret())
 }
 
 // Verify a JWT token
 export async function verifyJWT(token: string): Promise<JWTPayload | null> {
+  // Outside the try so a missing secret is a clear error, not a silent logout
+  const secret = getJwtSecret()
+
   try {
-    const { payload } = await jose.jwtVerify(token, JWT_SECRET)
+    const { payload } = await jose.jwtVerify(token, secret)
     return payload as JWTPayload
   } catch (error) {
     console.error('JWT verification failed:', error)
@@ -75,7 +83,7 @@ export async function verifyJWT(token: string): Promise<JWTPayload | null> {
 // Check if token needs refresh
 export async function shouldRefreshToken(token: string): Promise<boolean> {
   try {
-    const { payload } = await jose.jwtVerify(token, JWT_SECRET, {
+    const { payload } = await jose.jwtVerify(token, getJwtSecret(), {
       clockTolerance: 15, // 15 seconds tolerance for clock skew
     })
 
@@ -93,54 +101,31 @@ export async function shouldRefreshToken(token: string): Promise<boolean> {
 
 // Create a session using JWT
 export async function createSession(userId: string) {
-  try {
-    // Create JWT with user data
-    const token = await generateJWT({ userId })
+  // Create JWT with user data
+  const token = await generateJWT({ userId })
 
-    // Store JWT in a cookie
-    const cookieStore = await cookies()
-    cookieStore.set({
-      name: 'auth_token',
-      value: token,
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      maxAge: 60 * 60 * 24 * 7, // 1 week
-      path: '/',
-      sameSite: 'lax',
-    })
-
-    return true
-  } catch (error) {
-    console.error('Error creating session:', error)
-    return false
-  }
+  // Store JWT in a cookie
+  const cookieStore = await cookies()
+  cookieStore.set({
+    name: 'auth_token',
+    value: token,
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    maxAge: 60 * 60 * 24 * 7, // 1 week
+    path: '/',
+    sameSite: 'lax',
+  })
 }
 
 // Get current session from JWT
 export const getSession = cache(async () => {
-  try {
-    const cookieStore = await cookies()
-    const token = cookieStore.get('auth_token')?.value
+  const cookieStore = await cookies()
+  const token = cookieStore.get('auth_token')?.value
 
-    if (!token) return null
-    const payload = await verifyJWT(token)
+  if (!token) return null
+  const payload = await verifyJWT(token)
 
-    return payload ? { userId: payload.userId } : null
-  } catch (error) {
-    // Handle the specific prerendering error
-    if (
-      error instanceof Error &&
-      error.message.includes('During prerendering, `cookies()` rejects')
-    ) {
-      console.log(
-        'Cookies not available during prerendering, returning null session'
-      )
-      return null
-    }
-
-    console.error('Error getting session:', error)
-    return null
-  }
+  return payload ? { userId: payload.userId } : null
 })
 
 // Delete session by clearing the JWT cookie

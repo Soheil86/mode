@@ -1,4 +1,4 @@
-import { getIssue } from '@/lib/dal'
+import { getIssue, requireUser } from '@/lib/dal'
 import { formatRelativeTime } from '@/lib/utils'
 import { Priority, Status } from '@/lib/types'
 import Link from 'next/link'
@@ -13,6 +13,7 @@ export default async function IssuePage({
 }: {
   params: Promise<{ id: string }>
 }) {
+  const currentUser = await requireUser()
   const { id } = await params
   const issue = await getIssue(parseInt(id))
 
@@ -63,17 +64,19 @@ export default async function IssuePage({
         </Link>
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <h1 className="text-3xl font-bold">{title}</h1>
-          <div className="flex items-center space-x-2">
-            <Link href={`/issues/${id}/edit`}>
-              <Button variant="outline" size="sm">
-                <span className="flex items-center">
-                  <Edit2Icon size={16} className="mr-1" />
-                  Edit
-                </span>
-              </Button>
-            </Link>
-            <DeleteIssueButton id={parseInt(id)} />
-          </div>
+          {issue.userId === currentUser.id && (
+            <div className="flex items-center space-x-2">
+              <Link href={`/issues/${id}/edit`}>
+                <Button variant="outline" size="sm">
+                  <span className="flex items-center">
+                    <Edit2Icon size={16} className="mr-1" />
+                    Edit
+                  </span>
+                </Button>
+              </Link>
+              <DeleteIssueButton id={parseInt(id)} />
+            </div>
+          )}
         </div>
       </div>
 
@@ -86,7 +89,7 @@ export default async function IssuePage({
           <div className="text-sm text-gray-500">
             Created {formatRelativeTime(new Date(createdAt))}
           </div>
-          {updatedAt !== createdAt && (
+          {new Date(updatedAt).getTime() !== new Date(createdAt).getTime() && (
             <div className="text-sm text-gray-500">
               Updated {formatRelativeTime(new Date(updatedAt))}
             </div>

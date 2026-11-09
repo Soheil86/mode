@@ -8,7 +8,6 @@ import {
   deleteSession,
 } from '@/lib/auth'
 import { getUserByEmail } from '@/lib/dal'
-import { mockDelay } from '@/lib/utils'
 import { redirect } from 'next/navigation'
 
 // Define Zod schema for signin validation
@@ -41,9 +40,6 @@ export type ActionResponse = {
 
 export const signIn = async (formData: FormData): Promise<ActionResponse> => {
   try {
-    // Add a small delay to simulate network latency
-    await mockDelay(700)
-
     // Extract data from form
     const data = {
       email: formData.get('email') as string,
@@ -103,9 +99,6 @@ export const signIn = async (formData: FormData): Promise<ActionResponse> => {
 
 export const signUp = async (formData: FormData): Promise<ActionResponse> => {
   try {
-    // Add a small delay to simulate network latency
-    await mockDelay(700)
-
     // Extract data from form
     const data = {
       email: formData.get('email') as string,
@@ -164,7 +157,6 @@ export const signUp = async (formData: FormData): Promise<ActionResponse> => {
 
 export async function signOut(): Promise<void> {
   try {
-    await mockDelay(300)
     await deleteSession()
   } catch (error) {
     console.error('Sign out error:', error)
