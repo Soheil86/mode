@@ -8,6 +8,7 @@ import {
   deleteSession,
 } from '@/lib/auth'
 import { getUserByEmail } from '@/lib/dal'
+import { updateTag } from 'next/cache'
 import { redirect } from 'next/navigation'
 
 // Define Zod schema for signin validation
@@ -137,6 +138,9 @@ export const signUp = async (formData: FormData): Promise<ActionResponse> => {
         error: 'Failed to create user',
       }
     }
+
+    // New users can be assigned issues straight away
+    updateTag('users')
 
     // Create session for the newly registered user
     await createSession(user.id)

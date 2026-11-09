@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
 import { Toaster } from 'react-hot-toast'
+import { THEME_SCRIPT } from '@/lib/theme'
 
 const inter = Inter({
   subsets: ['latin'],
@@ -10,7 +11,8 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: 'Mode',
-  description: 'A modern issue tracking application built with Next.js 15',
+  description:
+    'An issue tracker with a drag-and-drop board, built with Next.js 16',
 }
 
 export default function RootLayout({
@@ -19,8 +21,11 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    // Browser extensions like LanguageTool add attributes to <html>
+    // The theme script and browser extensions change <html> before React loads
     <html lang="en" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
+      </head>
       <body className={`${inter.variable} font-sans antialiased`}>
         <Toaster position="top-right" />
         {children}

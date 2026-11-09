@@ -2,9 +2,13 @@
 
 import { useActionState } from 'react'
 import { unstable_rethrow, useRouter } from 'next/navigation'
-import { Issue, ISSUE_STATUS, ISSUE_PRIORITY } from '@/db/schema'
+import { Issue } from '@/db/schema'
+import { ISSUE_STATUS, ISSUE_PRIORITY } from '@/lib/constants'
+import { UserOption } from '@/lib/types'
+import { displayName } from '@/lib/utils'
 import Button from './ui/Button'
 import {
+  FieldError,
   Form,
   FormGroup,
   FormLabel,
@@ -12,11 +16,16 @@ import {
   FormTextarea,
   FormSelect,
   FormError,
+  fieldErrorProps,
 } from './ui/Form'
 import { createIssue, ActionResponse, updateIssue } from '@/app/actions/issues'
 
 interface IssueFormProps {
-  issue?: Pick<Issue, 'id' | 'title' | 'description' | 'status' | 'priority'>
+  issue?: Pick<
+    Issue,
+    'id' | 'title' | 'description' | 'status' | 'priority' | 'assigneeId'
+  >
+  users: UserOption[]
   isEditing?: boolean
 }
 
@@ -34,7 +43,7 @@ export default function IssueForm(props: IssueFormProps) {
   return <IssueFormContent key={bfcacheId} {...props} />
 }
 
-function IssueFormContent({ issue, isEditing = false }: IssueFormProps) {
+function IssueFormContent({ issue, users, isEditing = false }: IssueFormProps) {
   const router = useRouter()
 
   // Use useActionState hook for the form submission action
@@ -52,6 +61,7 @@ function IssueFormContent({ issue, isEditing = false }: IssueFormProps) {
         | 'in_progress'
         | 'done',
       priority: formData.get('priority') as 'low' | 'medium' | 'high',
+      assigneeId: (formData.get('assigneeId') as string) || null,
     }
 
     try {
@@ -72,17 +82,14 @@ function IssueFormContent({ issue, isEditing = false }: IssueFormProps) {
     }
   }, initialState)
 
-  const statusOptions = Object.values(ISSUE_STATUS).map(({ label, value }) => ({
-    label,
-    value,
-  }))
-
-  const priorityOptions = Object.values(ISSUE_PRIORITY).map(
-    ({ label, value }) => ({
-      label,
-      value,
-    }),
-  )
+  const errors = state?.errors
+  const assigneeOptions = [
+    { label: 'Unassigned', value: '' },
+    ...users.map((user) => ({
+      label: displayName(user.email),
+      value: user.id,
+    })),
+  ]
 
   return (
     <Form action={formAction}>
@@ -101,14 +108,9 @@ function IssueFormContent({ issue, isEditing = false }: IssueFormProps) {
           minLength={3}
           maxLength={100}
           disabled={isPending}
-          aria-describedby="title-error"
-          className={state?.errors?.title ? 'border-red-500' : ''}
+          {...fieldErrorProps('title', errors)}
         />
-        {state?.errors?.title && (
-          <p id="title-error" className="text-sm text-red-500">
-            {state.errors.title[0]}
-          </p>
-        )}
+        <FieldError name="title" errors={errors} />
       </FormGroup>
 
       <FormGroup>
@@ -120,34 +122,24 @@ function IssueFormContent({ issue, isEditing = false }: IssueFormProps) {
           rows={4}
           defaultValue={issue?.description || ''}
           disabled={isPending}
-          aria-describedby="description-error"
-          className={state?.errors?.description ? 'border-red-500' : ''}
+          {...fieldErrorProps('description', errors)}
         />
-        {state?.errors?.description && (
-          <p id="description-error" className="text-sm text-red-500">
-            {state.errors.description[0]}
-          </p>
-        )}
+        <FieldError name="description" errors={errors} />
       </FormGroup>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <FormGroup>
           <FormLabel htmlFor="status">Status</FormLabel>
           <FormSelect
             id="status"
             name="status"
             defaultValue={issue?.status || 'backlog'}
-            options={statusOptions}
+            options={Object.values(ISSUE_STATUS)}
             disabled={isPending}
             required
-            aria-describedby="status-error"
-            className={state?.errors?.status ? 'border-red-500' : ''}
+            {...fieldErrorProps('status', errors)}
           />
-          {state?.errors?.status && (
-            <p id="status-error" className="text-sm text-red-500">
-              {state.errors.status[0]}
-            </p>
-          )}
+          <FieldError name="status" errors={errors} />
         </FormGroup>
 
         <FormGroup>
@@ -156,17 +148,25 @@ function IssueFormContent({ issue, isEditing = false }: IssueFormProps) {
             id="priority"
             name="priority"
             defaultValue={issue?.priority || 'medium'}
-            options={priorityOptions}
+            options={Object.values(ISSUE_PRIORITY)}
             disabled={isPending}
             required
-            aria-describedby="priority-error"
-            className={state?.errors?.priority ? 'border-red-500' : ''}
+            {...fieldErrorProps('priority', errors)}
           />
-          {state?.errors?.priority && (
-            <p id="priority-error" className="text-sm text-red-500">
-              {state.errors.priority[0]}
-            </p>
-          )}
+          <FieldError name="priority" errors={errors} />
+        </FormGroup>
+
+        <FormGroup>
+          <FormLabel htmlFor="assigneeId">Assignee</FormLabel>
+          <FormSelect
+            id="assigneeId"
+            name="assigneeId"
+            defaultValue={issue?.assigneeId || ''}
+            options={assigneeOptions}
+            disabled={isPending}
+            {...fieldErrorProps('assigneeId', errors)}
+          />
+          <FieldError name="assigneeId" errors={errors} />
         </FormGroup>
       </div>
 

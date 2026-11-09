@@ -25,9 +25,6 @@ function getJwtSecret() {
 // JWT expiration time
 const JWT_EXPIRATION = '7d' // 7 days
 
-// Token refresh threshold (refresh if less than this time left)
-const REFRESH_THRESHOLD = 24 * 60 * 60 // 24 hours in seconds
-
 // Hash a password
 export async function hashPassword(password: string) {
   return hash(password, 10)
@@ -77,25 +74,6 @@ export async function verifyJWT(token: string): Promise<JWTPayload | null> {
   } catch (error) {
     console.error('JWT verification failed:', error)
     return null
-  }
-}
-
-// Check if token needs refresh
-export async function shouldRefreshToken(token: string): Promise<boolean> {
-  try {
-    const { payload } = await jose.jwtVerify(token, getJwtSecret(), {
-      clockTolerance: 15, // 15 seconds tolerance for clock skew
-    })
-
-    // Get expiration time
-    const exp = payload.exp as number
-    const now = Math.floor(Date.now() / 1000)
-
-    // If token expires within the threshold, refresh it
-    return exp - now < REFRESH_THRESHOLD
-  } catch {
-    // If verification fails, token is invalid or expired
-    return false
   }
 }
 

@@ -1,11 +1,9 @@
-import { Issue } from '@/db/schema'
+import { PRIORITY_VALUES, STATUS_VALUES } from './constants'
 
-export type Status = 'backlog' | 'todo' | 'in_progress' | 'done'
-export type Priority = 'low' | 'medium' | 'high'
+export type Status = (typeof STATUS_VALUES)[number]
+export type Priority = (typeof PRIORITY_VALUES)[number]
 
-export type IssueWithUser = Issue & {
-  user: {
-    id: string
-    email: string
-  }
+export type UserOption = {
+  id: string
+  email: string
 }

@@ -1,10 +1,11 @@
 import IssueForm from './IssueForm'
-import { requireUser } from '@/lib/dal'
+import { getUsers, requireUser } from '@/lib/dal'
 
 const NewIssue = async () => {
   await requireUser()
+  const users = await getUsers()
 
-  return <IssueForm />
+  return <IssueForm users={users} />
 }
 
 export default NewIssue

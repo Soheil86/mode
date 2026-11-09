@@ -13,20 +13,30 @@ export function formatRelativeTime(date: Date | string) {
   return formatDistanceToNow(parsedDate, { addSuffix: true })
 }
 
-// Simple validation check for email
-export function isValidEmail(email: string) {
-  return /\S+@\S+\.\S+/.test(email)
+type IssuesHrefOptions = {
+  q?: string
+  status?: string
+  priority?: string
+  assignee?: string
+  view?: string
+  page?: number
 }
 
-// Creates a URL-friendly slug from a string
-export function slugify(text: string) {
-  return text
-    .toString()
-    .toLowerCase()
-    .trim()
-    .replace(/\s+/g, '-') // Replace spaces with -
-    .replace(/[^\w-]+/g, '') // Remove all non-word chars
-    .replace(/--+/g, '-') // Replace multiple - with single -
-    .replace(/^-+/, '') // Trim - from start of text
-    .replace(/-+$/, '') // Trim - from end of text
+// The dashboard's state lives in the URL, leaving out anything at its default
+export function issuesHref({ view, page, ...filters }: IssuesHrefOptions) {
+  const params = new URLSearchParams()
+
+  for (const [key, value] of Object.entries(filters)) {
+    if (value) params.set(key, value)
+  }
+  if (view && view !== 'list') params.set('view', view)
+  if (page && page > 1) params.set('page', String(page))
+
+  const query = params.toString()
+  return query ? `/dashboard?${query}` : '/dashboard'
+}
+
+// Users only have an email, so its first part stands in for a name
+export function displayName(email: string) {
+  return email.split('@')[0]
 }

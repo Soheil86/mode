@@ -1,14 +1,10 @@
 import { InferSelectModel, relations } from 'drizzle-orm'
 import { pgTable, serial, text, timestamp, pgEnum } from 'drizzle-orm/pg-core'
+import { PRIORITY_VALUES, STATUS_VALUES } from '../lib/constants'
 
 // Enums for issue status and priority
-export const statusEnum = pgEnum('status', [
-  'backlog',
-  'todo',
-  'in_progress',
-  'done',
-])
-export const priorityEnum = pgEnum('priority', ['low', 'medium', 'high'])
+export const statusEnum = pgEnum('status', STATUS_VALUES)
+export const priorityEnum = pgEnum('priority', PRIORITY_VALUES)
 
 // Issues table
 export const issues = pgTable('issues', {
@@ -19,7 +15,12 @@ export const issues = pgTable('issues', {
   priority: priorityEnum('priority').default('medium').notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  // The person who created the issue, and who controls it
   userId: text('user_id').notNull(),
+  // The person working on it, if anyone
+  assigneeId: text('assignee_id').references(() => users.id, {
+    onDelete: 'set null',
+  }),
 })
 
 // Users table
@@ -35,27 +36,20 @@ export const issuesRelations = relations(issues, ({ one }) => ({
   user: one(users, {
     fields: [issues.userId],
     references: [users.id],
+    relationName: 'creator',
+  }),
+  assignee: one(users, {
+    fields: [issues.assigneeId],
+    references: [users.id],
+    relationName: 'assignee',
   }),
 }))
 
 export const usersRelations = relations(users, ({ many }) => ({
-  issues: many(issues),
+  issues: many(issues, { relationName: 'creator' }),
+  assignedIssues: many(issues, { relationName: 'assignee' }),
 }))
 
 // Types
 export type Issue = InferSelectModel<typeof issues>
 export type User = InferSelectModel<typeof users>
-
-// Status and priority labels for display
-export const ISSUE_STATUS = {
-  backlog: { label: 'Backlog', value: 'backlog' },
-  todo: { label: 'Todo', value: 'todo' },
-  in_progress: { label: 'In Progress', value: 'in_progress' },
-  done: { label: 'Done', value: 'done' },
-}
-
-export const ISSUE_PRIORITY = {
-  low: { label: 'Low', value: 'low' },
-  medium: { label: 'Medium', value: 'medium' },
-  high: { label: 'High', value: 'high' },
-}

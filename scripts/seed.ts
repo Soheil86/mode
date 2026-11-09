@@ -1,109 +1,131 @@
+import 'dotenv/config'
 import { hash } from 'bcrypt'
-import { v4 as uuidv4 } from 'uuid'
+import { nanoid } from 'nanoid'
+import { eq, inArray } from 'drizzle-orm'
 import { db } from '../db'
 import { issues, users } from '../db/schema'
+import { Priority, Status } from '../lib/types'
+
+// Safe to run on a real database: it never deletes anything, and adds the
+// sample issues only the first time.
+const DEMO_PASSWORD = process.env.SEED_DEMO_PASSWORD ?? 'mode-demo-2026'
+const DEMO_EMAILS = ['demo@mode.dev', 'teammate@mode.dev']
+
+type DemoIssue = {
+  title: string
+  description: string
+  status: Status
+  priority: Priority
+  owner: 'demo' | 'teammate'
+  assignee?: 'demo' | 'teammate'
+}
+
+const demoIssues: DemoIssue[] = [
+  {
+    title: 'Ship the Kanban board',
+    description: 'Drag issues between columns with optimistic updates.',
+    status: 'done',
+    priority: 'high',
+    owner: 'demo',
+    assignee: 'demo',
+  },
+  {
+    title: 'Add search and URL filters',
+    description: 'Filters live in the URL so a view can be shared by link.',
+    status: 'done',
+    priority: 'medium',
+    owner: 'demo',
+    assignee: 'teammate',
+  },
+  {
+    title: 'Write end-to-end tests for permissions',
+    description: 'Cover owner-only edit and delete with two real sessions.',
+    status: 'in_progress',
+    priority: 'high',
+    owner: 'teammate',
+    assignee: 'demo',
+  },
+  {
+    title: 'Improve keyboard navigation',
+    description: 'Add shortcuts for creating, searching and switching views.',
+    status: 'in_progress',
+    priority: 'medium',
+    owner: 'demo',
+    assignee: 'teammate',
+  },
+  {
+    title: 'Audit color contrast in dark mode',
+    description: 'Check badges and secondary text against WCAG AA.',
+    status: 'todo',
+    priority: 'medium',
+    owner: 'teammate',
+    assignee: 'teammate',
+  },
+  {
+    title: 'Fix focus ring on the sidebar',
+    description: 'The ring is clipped when the sidebar is collapsed.',
+    status: 'todo',
+    priority: 'low',
+    owner: 'demo',
+  },
+  {
+    title: 'Add rate limiting to sign-in',
+    description: 'Slow down repeated password attempts.',
+    status: 'backlog',
+    priority: 'high',
+    owner: 'demo',
+  },
+  {
+    title: 'Comments on issues',
+    description: 'Let teammates discuss an issue without leaving the app.',
+    status: 'backlog',
+    priority: 'low',
+    owner: 'teammate',
+  },
+]
 
 async function main() {
-  console.log('Starting database seeding...')
+  const password = await hash(DEMO_PASSWORD, 10)
 
-  // Clean up existing data
-  await db.delete(issues)
-  await db.delete(users)
-
-  // Create demo users
-  const demoPassword = await hash('password123', 10)
-
-  const adminUserId = uuidv4()
-  const memberUserId = uuidv4()
-
-  const adminUser = await db
+  await db
     .insert(users)
-    .values({
-      id: adminUserId,
-      email: 'admin@example.com',
-      password: demoPassword,
-    })
-    .returning()
-    .then((rows) => rows[0])
+    .values(DEMO_EMAILS.map((email) => ({ id: nanoid(), email, password })))
+    .onConflictDoNothing({ target: users.email })
 
-  const memberUser = await db
-    .insert(users)
-    .values({
-      id: memberUserId,
-      email: 'user@example.com',
-      password: demoPassword,
-    })
-    .returning()
-    .then((rows) => rows[0])
+  const accounts = await db
+    .select({ id: users.id, email: users.email })
+    .from(users)
+    .where(inArray(users.email, DEMO_EMAILS))
 
-  console.log('Created demo users:')
-  console.log(`- Admin: ${adminUser.email} (password: password123)`)
-  console.log(`- User: ${memberUser.email} (password: password123)`)
+  const idOf = (name: 'demo' | 'teammate') =>
+    accounts.find((account) => account.email.startsWith(name))!.id
 
-  // Create demo issues
-  const demoIssues = [
-    {
-      title: 'Implement user authentication',
-      description:
-        'Set up NextAuth.js for user authentication and create signin/signup pages.',
-      priority: 'high',
-      status: 'done',
-      userId: adminUserId,
-    },
-    {
-      title: 'Design landing page',
-      description:
-        'Create a modern landing page with Tailwind CSS that explains the app features.',
-      priority: 'medium',
-      status: 'in_progress',
-      userId: adminUserId,
-    },
-    {
-      title: 'Add dark mode support',
-      description:
-        'Implement dark mode toggle and ensure UI looks good in both themes.',
-      priority: 'low',
-      status: 'todo',
-      userId: memberUserId,
-    },
-    {
-      title: 'Create issue management API',
-      description:
-        'Build RESTful API endpoints for creating, updating and deleting issues.',
-      priority: 'high',
-      status: 'done',
-      userId: memberUserId,
-    },
-    {
-      title: 'Implement drag and drop for issues',
-      description:
-        'Add drag and drop functionality to move issues between status columns.',
-      priority: 'medium',
-      status: 'todo',
-      userId: adminUserId,
-    },
-  ]
+  const existing = await db
+    .select({ id: issues.id })
+    .from(issues)
+    .where(eq(issues.userId, idOf('demo')))
+    .limit(1)
 
-  for (const issue of demoIssues) {
-    // Explicitly cast string values to enum types to fix type issues
-    await db.insert(issues).values({
-      title: issue.title,
-      description: issue.description,
-      priority: issue.priority as 'low' | 'medium' | 'high',
-      status: issue.status as 'backlog' | 'todo' | 'in_progress' | 'done',
-      userId: issue.userId,
-    })
+  if (existing.length > 0) {
+    console.log('Demo issues already exist, nothing to add')
+    return
   }
 
-  console.log(`Created ${demoIssues.length} demo issues`)
-  console.log('Database seeding completed!')
+  await db.insert(issues).values(
+    demoIssues.map(({ owner, assignee, ...issue }) => ({
+      ...issue,
+      userId: idOf(owner),
+      assigneeId: assignee ? idOf(assignee) : null,
+    })),
+  )
+
+  console.log(`Added ${demoIssues.length} demo issues`)
+  console.log(`Sign in as ${DEMO_EMAILS[0]} with the demo password`)
 }
 
 main()
-  .catch((e) => {
-    console.error(e)
+  .then(() => process.exit(0))
+  .catch((error) => {
+    console.error(error)
     process.exit(1)
-  })
-  .finally(async () => {
-    console.log('Seed script finished')
   })

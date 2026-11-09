@@ -1,4 +1,4 @@
-import { getIssue, requireUser } from '@/lib/dal'
+import { getIssue, getUsers, requireUser } from '@/lib/dal'
 import IssueForm from '@/app/components/IssueForm'
 import { ArrowLeftIcon } from 'lucide-react'
 import Link from 'next/link'
@@ -21,13 +21,15 @@ export default async function EditIssuePage({
     redirect(`/issues/${id}`)
   }
 
+  const users = await getUsers()
+
   return (
     <div className="max-w-3xl mx-auto p-4 md:p-8">
       <Link
         href={`/issues/${id}`}
         className="inline-flex items-center text-sm text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200 mb-6"
       >
-        <ArrowLeftIcon size={16} className="mr-1" />
+        <ArrowLeftIcon size={16} className="mr-1" aria-hidden="true" />
         Back to Issue
       </Link>
 
@@ -36,12 +38,14 @@ export default async function EditIssuePage({
       <div className="bg-white dark:bg-dark-elevated border border-gray-200 dark:border-dark-border-default rounded-lg shadow-sm p-6">
         {/* Only pass the fields the form needs: props are sent to the browser */}
         <IssueForm
+          users={users}
           issue={{
             id: issue.id,
             title: issue.title,
             description: issue.description,
             status: issue.status,
             priority: issue.priority,
+            assigneeId: issue.assigneeId,
           }}
           isEditing
         />

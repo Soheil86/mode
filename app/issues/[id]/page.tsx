@@ -1,10 +1,10 @@
 import { getIssue, requireUser } from '@/lib/dal'
-import { formatRelativeTime } from '@/lib/utils'
-import { Priority, Status } from '@/lib/types'
+import { displayName, formatRelativeTime } from '@/lib/utils'
+import { ISSUE_PRIORITY, ISSUE_STATUS } from '@/lib/constants'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import Badge from '@/app/components/ui/Badge'
-import Button from '@/app/components/ui/Button'
+import { buttonStyles } from '@/app/components/ui/Button'
 import { ArrowLeftIcon, Edit2Icon } from 'lucide-react'
 import DeleteIssueButton from '../../components/DeleteIssueButton'
 
@@ -21,58 +21,42 @@ export default async function IssuePage({
     notFound()
   }
 
-  const { title, description, status, priority, createdAt, updatedAt, user } =
-    issue
+  const {
+    title,
+    description,
+    status,
+    priority,
+    createdAt,
+    updatedAt,
+    user,
+    assignee,
+  } = issue
 
-  const getStatusLabel = (status: string) => {
-    switch (status) {
-      case 'backlog':
-        return 'Backlog'
-      case 'todo':
-        return 'Todo'
-      case 'in_progress':
-        return 'In Progress'
-      case 'done':
-        return 'Done'
-      default:
-        return status
-    }
-  }
-
-  const getPriorityLabel = (priority: string) => {
-    switch (priority) {
-      case 'low':
-        return 'Low'
-      case 'medium':
-        return 'Medium'
-      case 'high':
-        return 'High'
-      default:
-        return priority
-    }
-  }
+  const statusLabel = ISSUE_STATUS[status].label
+  const priorityLabel = ISSUE_PRIORITY[priority].label
+  const wasUpdated =
+    new Date(updatedAt).getTime() !== new Date(createdAt).getTime()
 
   return (
-    <div className="max-w-4xl mx-auto p-4 md:p-8">
+    <main className="max-w-4xl mx-auto p-4 md:p-8">
       <div className="mb-8">
         <Link
           href="/dashboard"
           className="inline-flex items-center text-sm text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200 mb-4"
         >
-          <ArrowLeftIcon size={16} className="mr-1" />
+          <ArrowLeftIcon size={16} className="mr-1" aria-hidden="true" />
           Back to Issues
         </Link>
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <h1 className="text-3xl font-bold">{title}</h1>
           {issue.userId === currentUser.id && (
             <div className="flex items-center space-x-2">
-              <Link href={`/issues/${id}/edit`}>
-                <Button variant="outline" size="sm">
-                  <span className="flex items-center">
-                    <Edit2Icon size={16} className="mr-1" />
-                    Edit
-                  </span>
-                </Button>
+              <Link
+                href={`/issues/${id}/edit`}
+                className={buttonStyles({ variant: 'outline', size: 'sm' })}
+              >
+                <Edit2Icon size={16} className="mr-1" aria-hidden="true" />
+                Edit
               </Link>
               <DeleteIssueButton id={parseInt(id)} />
             </div>
@@ -82,15 +66,13 @@ export default async function IssuePage({
 
       <div className="bg-white dark:bg-dark-elevated border border-gray-200 dark:border-dark-border-default rounded-lg shadow-sm p-6 mb-8">
         <div className="flex flex-wrap gap-3 mb-6">
-          <Badge status={status as Status}>{getStatusLabel(status)}</Badge>
-          <Badge priority={priority as Priority}>
-            {getPriorityLabel(priority)}
-          </Badge>
-          <div className="text-sm text-gray-500">
+          <Badge status={status}>{statusLabel}</Badge>
+          <Badge priority={priority}>{priorityLabel}</Badge>
+          <div className="text-sm text-gray-500 dark:text-gray-400">
             Created {formatRelativeTime(new Date(createdAt))}
           </div>
-          {new Date(updatedAt).getTime() !== new Date(createdAt).getTime() && (
-            <div className="text-sm text-gray-500">
+          {wasUpdated && (
+            <div className="text-sm text-gray-500 dark:text-gray-400">
               Updated {formatRelativeTime(new Date(updatedAt))}
             </div>
           )}
@@ -101,35 +83,44 @@ export default async function IssuePage({
             <p className="whitespace-pre-line">{description}</p>
           </div>
         ) : (
-          <p className="text-gray-500 italic">No description provided.</p>
+          <p className="text-gray-500 dark:text-gray-400 italic">
+            No description provided.
+          </p>
         )}
       </div>
 
       <div className="bg-white dark:bg-dark-elevated border border-gray-200 dark:border-dark-border-default rounded-lg shadow-sm p-6">
         <h2 className="text-lg font-medium mb-2">Details</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <p className="text-sm font-medium text-gray-500 mb-1">
-              Assigned to
-            </p>
-            <p>{user.email}</p>
-          </div>
-          <div>
-            <p className="text-sm font-medium text-gray-500 mb-1">Status</p>
-            <Badge status={status as Status}>{getStatusLabel(status)}</Badge>
-          </div>
-          <div>
-            <p className="text-sm font-medium text-gray-500 mb-1">Priority</p>
-            <Badge priority={priority as Priority}>
-              {getPriorityLabel(priority)}
-            </Badge>
-          </div>
-          <div>
-            <p className="text-sm font-medium text-gray-500 mb-1">Created</p>
-            <p>{formatRelativeTime(new Date(createdAt))}</p>
-          </div>
-        </div>
+        <dl className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Detail label="Assigned to">
+            {assignee ? displayName(assignee.email) : 'Unassigned'}
+          </Detail>
+          <Detail label="Created by">{displayName(user.email)}</Detail>
+          <Detail label="Status">
+            <Badge status={status}>{statusLabel}</Badge>
+          </Detail>
+          <Detail label="Priority">
+            <Badge priority={priority}>{priorityLabel}</Badge>
+          </Detail>
+        </dl>
       </div>
+    </main>
+  )
+}
+
+function Detail({
+  label,
+  children,
+}: {
+  label: string
+  children: React.ReactNode
+}) {
+  return (
+    <div>
+      <dt className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">
+        {label}
+      </dt>
+      <dd>{children}</dd>
     </div>
   )
 }

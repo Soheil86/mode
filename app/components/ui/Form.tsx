@@ -121,29 +121,43 @@ interface FormErrorProps extends React.HTMLAttributes<HTMLParagraphElement> {
 
 export function FormError({ className, children, ...props }: FormErrorProps) {
   return (
-    <p className={cn('text-xs font-medium text-red-500', className)} {...props}>
+    <p
+      role="alert"
+      className={cn('text-sm font-medium text-red-500', className)}
+      {...props}
+    >
       {children}
     </p>
   )
 }
 
-// Form Description
-interface FormDescriptionProps
-  extends React.HTMLAttributes<HTMLParagraphElement> {
-  children: React.ReactNode
+// Field-level errors. An input only points at its error element when one
+// exists, so screen readers aren't sent to something that isn't there.
+type FieldErrors = Record<string, string[]> | undefined
+
+export function fieldErrorProps(name: string, errors: FieldErrors) {
+  const hasError = Boolean(errors?.[name])
+
+  return {
+    'aria-invalid': hasError || undefined,
+    'aria-describedby': hasError ? `${name}-error` : undefined,
+    className: hasError ? 'border-red-500' : undefined,
+  }
 }
 
-export function FormDescription({
-  className,
-  children,
-  ...props
-}: FormDescriptionProps) {
+export function FieldError({
+  name,
+  errors,
+}: {
+  name: string
+  errors: FieldErrors
+}) {
+  const message = errors?.[name]?.[0]
+  if (!message) return null
+
   return (
-    <p
-      className={cn('text-xs text-gray-500 dark:text-gray-400', className)}
-      {...props}
-    >
-      {children}
+    <p id={`${name}-error`} className="text-sm text-red-500">
+      {message}
     </p>
   )
 }

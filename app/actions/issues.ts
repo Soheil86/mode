@@ -2,9 +2,14 @@
 
 import { db } from '@/db'
 import { issues } from '@/db/schema'
-import { and, eq } from 'drizzle-orm'
+import { and, eq, or } from 'drizzle-orm'
 import { getCurrentUser } from '@/lib/dal'
-import { IssueSchema, type IssueData } from '@/lib/validation'
+import { Status } from '@/lib/types'
+import {
+  IssueSchema,
+  IssueStatusSchema,
+  type IssueData,
+} from '@/lib/validation'
 import { updateTag } from 'next/cache'
 import { redirect } from 'next/navigation'
 
@@ -15,7 +20,13 @@ export type ActionResponse = {
   error?: string
 }
 
-const NOT_OWNER_RESPONSE: ActionResponse = {
+const UNAUTHORIZED_RESPONSE: ActionResponse = {
+  success: false,
+  message: 'Unauthorized access',
+  error: 'Unauthorized',
+}
+
+const NOT_ALLOWED_RESPONSE: ActionResponse = {
   success: false,
   message: 'Issue not found, or you do not have permission to change it',
   error: 'Forbidden',
@@ -26,11 +37,7 @@ export async function createIssue(data: IssueData): Promise<ActionResponse> {
     // Security check - ensure user is authenticated
     const user = await getCurrentUser()
     if (!user) {
-      return {
-        success: false,
-        message: 'Unauthorized access',
-        error: 'Unauthorized',
-      }
+      return UNAUTHORIZED_RESPONSE
     }
     // Validate with Zod
     const validationResult = IssueSchema.safeParse(data)
@@ -69,11 +76,7 @@ export async function updateIssue(
     // Security check - ensure user is authenticated
     const user = await getCurrentUser()
     if (!user) {
-      return {
-        success: false,
-        message: 'Unauthorized access',
-        error: 'Unauthorized',
-      }
+      return UNAUTHORIZED_RESPONSE
     }
 
     // Allow partial validation for updates
@@ -95,7 +98,7 @@ export async function updateIssue(
       .returning()
 
     if (updated.length === 0) {
-      return NOT_OWNER_RESPONSE
+      return NOT_ALLOWED_RESPONSE
     }
 
     updateTag('issues')
@@ -112,12 +115,56 @@ export async function updateIssue(
   redirect('/dashboard')
 }
 
+// Used by the board. The assignee can move an issue, but only the owner can
+// edit its details or delete it.
+export async function moveIssue(
+  id: number,
+  status: Status,
+): Promise<ActionResponse> {
+  try {
+    const user = await getCurrentUser()
+    if (!user) {
+      return UNAUTHORIZED_RESPONSE
+    }
+
+    const validationResult = IssueStatusSchema.safeParse(status)
+    if (!validationResult.success) {
+      return { success: false, message: 'Please select a valid status' }
+    }
+
+    const updated = await db
+      .update(issues)
+      .set({ status: validationResult.data, updatedAt: new Date() })
+      .where(
+        and(
+          eq(issues.id, id),
+          or(eq(issues.userId, user.id), eq(issues.assigneeId, user.id)),
+        ),
+      )
+      .returning()
+
+    if (updated.length === 0) {
+      return NOT_ALLOWED_RESPONSE
+    }
+
+    updateTag('issues')
+    return { success: true, message: 'Issue moved' }
+  } catch (error) {
+    console.error('Error moving issue:', error)
+    return {
+      success: false,
+      message: 'An error occurred while moving the issue',
+      error: 'Failed to move issue',
+    }
+  }
+}
+
 export async function deleteIssue(id: number): Promise<ActionResponse> {
   try {
     // Security check - ensure user is authenticated
     const user = await getCurrentUser()
     if (!user) {
-      throw new Error('Unauthorized')
+      return UNAUTHORIZED_RESPONSE
     }
 
     // Only matches when the signed-in user owns this issue
@@ -127,7 +174,7 @@ export async function deleteIssue(id: number): Promise<ActionResponse> {
       .returning()
 
     if (deleted.length === 0) {
-      return NOT_OWNER_RESPONSE
+      return NOT_ALLOWED_RESPONSE
     }
 
     updateTag('issues')
