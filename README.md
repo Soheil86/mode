@@ -4,7 +4,7 @@ An issue tracker with a drag-and-drop board, shareable filters and keyboard
 shortcuts. Built with Next.js 16 Server Components, Server Actions and
 PostgreSQL.
 
-**[Live demo](https://next-js-fundamentals-alpha.vercel.app/)**: sign in with
+**[Live demo](https://mode-issues.vercel.app/)**: sign in with
 `demo@mode.dev` and the password `mode-demo-2026`.
 
 ![The Mode board in dark mode](docs/board.png)
