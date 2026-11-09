@@ -93,7 +93,7 @@ You need Node.js 22 or later and a PostgreSQL database. A free
 [Neon](https://neon.tech/) database works well.
 
 ```bash
-git clone https://github.com/Soheil86/next.js-fundamentals.git mode
+git clone https://github.com/Soheil86/mode.git
 cd mode
 npm install
 cp .env.example .env

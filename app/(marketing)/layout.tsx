@@ -3,7 +3,7 @@ import { Timestamp } from '../components/Timestamp'
 import { buttonStyles } from '../components/ui/Button'
 import ThemeToggle from '../components/ThemeToggle'
 
-const REPOSITORY_URL = 'https://github.com/Soheil86/next.js-fundamentals'
+const REPOSITORY_URL = 'https://github.com/Soheil86/mode'
 
 export default async function MarketingLayout({
   children,
